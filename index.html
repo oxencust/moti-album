@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moti 體態照片</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📸</text></svg>">
+    <style>
+        /* 品牌配色 */
+        :root {
+            --white: #ffffff;
+            --gray: #808080;
+            --green: #7ac19a;
+            --green-light: #e2ede6;
+            --green-dark: #5f846f;
+            --pink: #f2ac98;
+            --pink-light: #faece8;
+            --pink-dark: #c67566;
+            --yellow: #ffe08b;
+            --yellow-light: #fcf4e3;
+            --yellow-dark: #ba9e60;
+            --blue: #9fcccc;
+            --blue-light: #daedec;
+            --blue-dark: #66888e;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--green-light) 0%, var(--blue-light) 100%);
+            min-height: 100vh;
+            padding: 16px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 24px 20px;
+            background: linear-gradient(135deg, var(--green-dark) 0%, var(--green) 100%);
+            color: var(--white);
+            border-radius: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(95, 132, 111, 0.3);
+        }
+        
+        .header-icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+        }
+        
+        .header h1 { 
+            font-size: 1.5rem; 
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .header-info {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            font-size: 0.95rem;
+            opacity: 0.95;
+        }
+        
+        .header-info span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .photo-count {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 6px 14px;
+            border-radius: 20px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 12px;
+        }
+        
+        .gallery-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(95, 132, 111, 0.15);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            background: var(--white);
+        }
+        
+        .gallery-item:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 8px 20px rgba(95, 132, 111, 0.25);
+        }
+        
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .gallery-item .index {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: var(--green-dark);
+            color: var(--white);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        /* Lightbox */
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(95, 132, 111, 0.97);
+            z-index: 1000;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .lightbox.active { display: flex; }
+        
+        .lightbox-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--white);
+        }
+        
+        .lightbox-counter {
+            font-size: 1rem;
+            opacity: 0.9;
+            background: rgba(255,255,255,0.15);
+            padding: 6px 14px;
+            border-radius: 20px;
+        }
+        
+        .lightbox-close {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            color: var(--white);
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        
+        .lightbox-close:hover {
+            background: var(--pink);
+        }
+        
+        .lightbox-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 60px 16px 80px;
+        }
+        
+        .lightbox-content img { 
+            max-width: 100%; 
+            max-height: 100%; 
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            color: var(--white);
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.2s;
+        }
+        
+        .lightbox-nav:hover { 
+            background: var(--green);
+            transform: translateY(-50%) scale(1.1);
+        }
+        .lightbox-nav.prev { left: 16px; }
+        .lightbox-nav.next { right: 16px; }
+        
+        .lightbox-thumbnails {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            overflow-x: auto;
+            background: rgba(95, 132, 111, 0.8);
+        }
+        
+        .lightbox-thumb {
+            width: 50px;
+            height: 50px;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s, transform 0.2s;
+            flex-shrink: 0;
+            border: 2px solid transparent;
+        }
+        
+        .lightbox-thumb.active {
+            opacity: 1;
+            transform: scale(1.1);
+            border-color: var(--yellow);
+            box-shadow: 0 0 10px rgba(255, 224, 139, 0.5);
+        }
+        
+        .lightbox-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* No images */
+        .no-images {
+            text-align: center;
+            padding: 60px 20px;
+            background: var(--white);
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(95, 132, 111, 0.1);
+        }
+        
+        .no-images-icon {
+            font-size: 4rem;
+            margin-bottom: 16px;
+        }
+        
+        .no-images p {
+            color: var(--gray);
+            font-size: 1.1rem;
+        }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--green-dark);
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--green-light);
+            border-top-color: var(--green);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--green-dark);
+            font-size: 0.85rem;
+        }
+        
+        .footer a {
+            color: var(--green);
+            text-decoration: none;
+        }
+        
+        /* Logo */
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--white);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .logo-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+        
+        /* Mobile */
+        @media (max-width: 480px) {
+            .gallery {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+            
+            .lightbox-nav {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+            }
+            
+            .lightbox-nav.prev { left: 8px; }
+            .lightbox-nav.next { right: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#5f846f" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                </div>
+                <span style="font-size: 1.1rem; font-weight: 500;">衡點健身</span>
+            </div>
+            <h1>Moti 體態照片</h1>
+            <div class="header-info">
+                <span id="memberInfo">👤 載入中...</span>
+                <span id="dateInfo">📅 --</span>
+            </div>
+            <div class="photo-count" id="photoCount">📷 -- 張照片</div>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <p>載入照片中...</p>
+        </div>
+        
+        <div class="gallery" id="gallery" style="display:none;"></div>
+        
+        <div class="no-images" id="noImages" style="display:none;">
+            <div class="no-images-icon">📷</div>
+            <p>沒有找到照片</p>
+        </div>
+        
+        <div class="footer">
+            <p>衡點健身 Balance Point Fitness</p>
+        </div>
+    </div>
+    
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox">
+        <div class="lightbox-header">
+            <span class="lightbox-counter" id="lightboxCounter">1 / 5</span>
+            <button class="lightbox-close" onclick="closeLightbox()">×</button>
+        </div>
+        <div class="lightbox-content">
+            <img id="lightboxImg" src="">
+        </div>
+        <button class="lightbox-nav prev" onclick="navigateLightbox(-1)">‹</button>
+        <button class="lightbox-nav next" onclick="navigateLightbox(1)">›</button>
+        <div class="lightbox-thumbnails" id="lightboxThumbnails"></div>
+    </div>
+
+    <script>
+        // 全域變數
+        var images = [];
+        var currentIndex = 0;
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+        });
+        
+        function loadData() {
+            // 從 URL 參數取得資料
+            var params = new URLSearchParams(window.location.search);
+            var member = params.get('member') || '會員';
+            var date = params.get('date') || '';
+            var imagesParam = params.get('images') || '';
+            
+            // 解析圖片列表
+            if (imagesParam) {
+                images = imagesParam.split(',').filter(function(url) {
+                    return url && url.trim();
+                }).map(function(url) {
+                    return url.trim();
+                });
+            }
+            
+            // 更新標題資訊
+            document.getElementById('memberInfo').textContent = '👤 ' + member;
+            document.getElementById('dateInfo').textContent = date ? '📅 ' + date : '';
+            document.getElementById('photoCount').textContent = '📷 ' + images.length + ' 張照片';
+            
+            // 更新頁面標題
+            document.title = member + ' - Moti 體態照片';
+            
+            // 隱藏載入中
+            document.getElementById('loading').style.display = 'none';
+            
+            // 顯示圖片或無圖片訊息
+            if (images.length > 0) {
+                renderGallery();
+                renderThumbnails();
+            } else {
+                document.getElementById('noImages').style.display = 'block';
+            }
+        }
+        
+        function renderGallery() {
+            var gallery = document.getElementById('gallery');
+            gallery.style.display = 'grid';
+            gallery.innerHTML = '';
+            
+            images.forEach(function(url, index) {
+                var item = document.createElement('div');
+                item.className = 'gallery-item';
+                item.onclick = function() { openLightbox(index); };
+                item.innerHTML = 
+                    '<img src="' + url + '" alt="照片 ' + (index + 1) + '" loading="lazy">' +
+                    '<span class="index">' + (index + 1) + '</span>';
+                gallery.appendChild(item);
+            });
+        }
+        
+        function renderThumbnails() {
+            var container = document.getElementById('lightboxThumbnails');
+            container.innerHTML = '';
+            
+            images.forEach(function(url, index) {
+                var thumb = document.createElement('div');
+                thumb.className = 'lightbox-thumb' + (index === 0 ? ' active' : '');
+                thumb.onclick = function(e) { 
+                    e.stopPropagation();
+                    goToImage(index); 
+                };
+                thumb.innerHTML = '<img src="' + url + '" alt="">';
+                container.appendChild(thumb);
+            });
+        }
+        
+        function openLightbox(index) {
+            currentIndex = index;
+            updateLightbox();
+            document.getElementById('lightbox').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        
+        function navigateLightbox(direction) {
+            event.stopPropagation();
+            currentIndex = (currentIndex + direction + images.length) % images.length;
+            updateLightbox();
+        }
+        
+        function goToImage(index) {
+            currentIndex = index;
+            updateLightbox();
+        }
+        
+        function updateLightbox() {
+            document.getElementById('lightboxImg').src = images[currentIndex];
+            document.getElementById('lightboxCounter').textContent = (currentIndex + 1) + ' / ' + images.length;
+            
+            // 更新縮圖選中狀態
+            document.querySelectorAll('.lightbox-thumb').forEach(function(thumb, i) {
+                thumb.classList.toggle('active', i === currentIndex);
+            });
+        }
+        
+        // 鍵盤操作
+        document.addEventListener('keydown', function(e) {
+            if (!document.getElementById('lightbox').classList.contains('active')) return;
+            
+            if (e.key === 'Escape') closeLightbox();
+            if (e.key === 'ArrowLeft') navigateLightbox(-1);
+            if (e.key === 'ArrowRight') navigateLightbox(1);
+        });
+        
+        // 觸控滑動
+        var touchStartX = 0;
+        var touchEndX = 0;
+        
+        document.getElementById('lightbox').addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].screenX;
+        }, false);
+        
+        document.getElementById('lightbox').addEventListener('touchend', function(e) {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }, false);
+        
+        function handleSwipe() {
+            var diff = touchStartX - touchEndX;
+            if (Math.abs(diff) > 50) {
+                if (diff > 0) {
+                    navigateLightbox(1); // 左滑 → 下一張
+                } else {
+                    navigateLightbox(-1); // 右滑 → 上一張
+                }
+            }
+        }
+    </script>
+</body>
+</html>
