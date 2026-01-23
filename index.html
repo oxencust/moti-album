@@ -431,7 +431,7 @@
             var imagesParam = params.get('images') || '';
             
             // 如果有 id 參數，呼叫後端查詢
-            if (id) {
+            if (id && CONFIG.MAKE_WEBHOOK_URL !== '請填入_MAKE_WEBHOOK_URL') {
                 try {
                     var response = await fetch(CONFIG.MAKE_WEBHOOK_URL, {
                         method: 'POST',
@@ -442,7 +442,21 @@
                         })
                     });
                     
-                    var result = await response.json();
+                    // 檢查回應狀態
+                    if (!response.ok) {
+                        throw new Error('HTTP 錯誤: ' + response.status);
+                    }
+                    
+                    var text = await response.text();
+                    
+                    // 嘗試解析 JSON
+                    var result;
+                    try {
+                        result = JSON.parse(text);
+                    } catch (e) {
+                        console.error('JSON 解析失敗:', text);
+                        throw new Error('回應不是有效的 JSON');
+                    }
                     
                     if (result.success && result.album) {
                         member = result.album.member_name || '會員';
@@ -450,18 +464,35 @@
                         
                         // 解析 moti_urls（可能是 JSON 字串或陣列）
                         var urls = result.album.moti_urls;
+                        console.log('原始 moti_urls:', urls);
+                        
                         if (typeof urls === 'string') {
                             try {
                                 images = JSON.parse(urls);
                             } catch (e) {
-                                images = urls.split(',');
+                                // 逗號分隔的字串，trim 每個 URL
+                                images = urls.split(',').map(function(u) { 
+                                    return u.trim(); 
+                                }).filter(function(u) { 
+                                    return u && u.startsWith('http'); 
+                                });
                             }
                         } else if (Array.isArray(urls)) {
                             images = urls;
                         }
+                        
+                        console.log('解析後圖片數量:', images.length);
+                        console.log('圖片列表:', images);
+                    } else {
+                        console.log('查詢結果:', result);
                     }
                 } catch (error) {
                     console.error('查詢相簿失敗:', error);
+                    // 顯示錯誤訊息
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('noImages').style.display = 'block';
+                    document.querySelector('.no-images p').textContent = '無法載入相簿，請稍後再試';
+                    return;
                 }
             } else if (imagesParam) {
                 // 原有模式：直接從 URL 參數取得圖片
@@ -471,6 +502,12 @@
                 }).map(function(url) {
                     return url.trim();
                 });
+            } else if (id) {
+                // 有 id 但沒設定 webhook
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('noImages').style.display = 'block';
+                document.querySelector('.no-images p').textContent = '相簿功能尚未設定完成';
+                return;
             }
             
             // 更新標題資訊
