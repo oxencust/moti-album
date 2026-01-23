@@ -407,6 +407,12 @@
     </div>
 
     <script>
+        // 設定
+        var CONFIG = {
+            // 【請填入】Make Webhook URL（查詢相簿用）
+            MAKE_WEBHOOK_URL: 'https://hook.us2.make.com/vsk129ur2xv54sscfoflt5aacil4mws2'
+        };
+        
         // 全域變數
         var images = [];
         var currentIndex = 0;
@@ -416,15 +422,50 @@
             loadData();
         });
         
-        function loadData() {
+        async function loadData() {
             // 從 URL 參數取得資料
             var params = new URLSearchParams(window.location.search);
-            var member = params.get('member') || '會員';
+            var id = params.get('id');
+            var member = params.get('member') || '';
             var date = params.get('date') || '';
             var imagesParam = params.get('images') || '';
             
-            // 解析圖片列表
-            if (imagesParam) {
+            // 如果有 id 參數，呼叫後端查詢
+            if (id) {
+                try {
+                    var response = await fetch(CONFIG.MAKE_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'get_album',
+                            id: id
+                        })
+                    });
+                    
+                    var result = await response.json();
+                    
+                    if (result.success && result.album) {
+                        member = result.album.member_name || '會員';
+                        date = result.album.assessment_date || '';
+                        
+                        // 解析 moti_urls（可能是 JSON 字串或陣列）
+                        var urls = result.album.moti_urls;
+                        if (typeof urls === 'string') {
+                            try {
+                                images = JSON.parse(urls);
+                            } catch (e) {
+                                images = urls.split(',');
+                            }
+                        } else if (Array.isArray(urls)) {
+                            images = urls;
+                        }
+                    }
+                } catch (error) {
+                    console.error('查詢相簿失敗:', error);
+                }
+            } else if (imagesParam) {
+                // 原有模式：直接從 URL 參數取得圖片
+                member = member || '會員';
                 images = imagesParam.split(',').filter(function(url) {
                     return url && url.trim();
                 }).map(function(url) {
@@ -433,12 +474,12 @@
             }
             
             // 更新標題資訊
-            document.getElementById('memberInfo').textContent = '👤 ' + member;
+            document.getElementById('memberInfo').textContent = '👤 ' + (member || '會員');
             document.getElementById('dateInfo').textContent = date ? '📅 ' + date : '';
             document.getElementById('photoCount').textContent = '📷 ' + images.length + ' 張照片';
             
             // 更新頁面標題
-            document.title = member + ' - Moti 體態照片';
+            document.title = (member || '會員') + ' - Moti 體態照片';
             
             // 隱藏載入中
             document.getElementById('loading').style.display = 'none';
