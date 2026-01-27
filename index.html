@@ -83,6 +83,31 @@
             font-size: 0.9rem;
         }
         
+        /* Section */
+        .section {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(95, 132, 111, 0.1);
+        }
+        
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--green-dark);
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--green);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .section-title.pink {
+            border-bottom-color: var(--pink);
+        }
+        
         .gallery {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -125,6 +150,23 @@
             justify-content: center;
             font-size: 0.8rem;
             font-weight: 600;
+        }
+        
+        /* InBody 特殊樣式 */
+        .inbody-item {
+            aspect-ratio: auto;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .inbody-item img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+        }
+        
+        .inbody-item .index {
+            background: var(--pink-dark);
         }
         
         /* Lightbox */
@@ -254,6 +296,11 @@
             box-shadow: 0 0 10px rgba(255, 224, 139, 0.5);
         }
         
+        .lightbox-thumb.inbody-thumb.active {
+            border-color: var(--pink);
+            box-shadow: 0 0 10px rgba(242, 172, 152, 0.5);
+        }
+        
         .lightbox-thumb img {
             width: 100%;
             height: 100%;
@@ -263,20 +310,19 @@
         /* No images */
         .no-images {
             text-align: center;
-            padding: 60px 20px;
-            background: var(--white);
-            border-radius: 16px;
-            box-shadow: 0 2px 8px rgba(95, 132, 111, 0.1);
+            padding: 40px 20px;
+            color: var(--gray);
         }
         
         .no-images-icon {
-            font-size: 4rem;
-            margin-bottom: 16px;
+            font-size: 3rem;
+            margin-bottom: 12px;
+            opacity: 0.5;
         }
         
         .no-images p {
             color: var(--gray);
-            font-size: 1.1rem;
+            font-size: 1rem;
         }
         
         /* Loading */
@@ -367,7 +413,7 @@
                 </div>
                 <span style="font-size: 1.1rem; font-weight: 500;">衡點健身</span>
             </div>
-            <h1>Moti 體態照片</h1>
+            <h1>體態分析相簿</h1>
             <div class="header-info">
                 <span id="memberInfo">👤 載入中...</span>
                 <span id="dateInfo">📅 --</span>
@@ -380,11 +426,26 @@
             <p>載入照片中...</p>
         </div>
         
-        <div class="gallery" id="gallery" style="display:none;"></div>
-        
-        <div class="no-images" id="noImages" style="display:none;">
-            <div class="no-images-icon">📷</div>
-            <p>沒有找到照片</p>
+        <div id="content" style="display:none;">
+            <!-- Moti 照片區 -->
+            <div class="section" id="motiSection">
+                <div class="section-title">📸 Moti 3D 體態照片</div>
+                <div class="gallery" id="motiGallery"></div>
+                <div class="no-images" id="noMoti" style="display:none;">
+                    <div class="no-images-icon">📷</div>
+                    <p>尚無 Moti 照片</p>
+                </div>
+            </div>
+            
+            <!-- InBody 區 -->
+            <div class="section" id="inbodySection">
+                <div class="section-title pink">📊 InBody 檢測報告</div>
+                <div class="gallery" id="inbodyGallery"></div>
+                <div class="no-images" id="noInbody" style="display:none;">
+                    <div class="no-images-icon">📊</div>
+                    <p>尚無 InBody 報告</p>
+                </div>
+            </div>
         </div>
         
         <div class="footer">
@@ -409,12 +470,11 @@
     <script>
         // 設定
         var CONFIG = {
-            // 【請填入】Make Webhook URL（查詢相簿用）
             MAKE_WEBHOOK_URL: 'https://hook.us2.make.com/vsk129ur2xv54sscfoflt5aacil4mws2'
         };
         
         // 全域變數
-        var images = [];
+        var allImages = [];  // { url, type: 'moti' | 'inbody' }
         var currentIndex = 0;
         
         // 初始化
@@ -423,15 +483,15 @@
         });
         
         async function loadData() {
-            // 從 URL 參數取得資料
             var params = new URLSearchParams(window.location.search);
             var id = params.get('id');
-            var member = params.get('member') || '';
-            var date = params.get('date') || '';
-            var imagesParam = params.get('images') || '';
             
-            // 如果有 id 參數，呼叫後端查詢
-            if (id && CONFIG.MAKE_WEBHOOK_URL !== '請填入_MAKE_WEBHOOK_URL') {
+            var member = '';
+            var date = '';
+            var motiImages = [];
+            var inbodyUrl = '';
+            
+            if (id && CONFIG.MAKE_WEBHOOK_URL) {
                 try {
                     var response = await fetch(CONFIG.MAKE_WEBHOOK_URL, {
                         method: 'POST',
@@ -442,15 +502,13 @@
                         })
                     });
                     
-                    // 檢查回應狀態
                     if (!response.ok) {
                         throw new Error('HTTP 錯誤: ' + response.status);
                     }
                     
                     var text = await response.text();
-                    
-                    // 嘗試解析 JSON
                     var result;
+                    
                     try {
                         result = JSON.parse(text);
                     } catch (e) {
@@ -462,102 +520,111 @@
                         member = result.album.member_name || '會員';
                         date = result.album.assessment_date || '';
                         
-                        // 解析 moti_urls（可能是 JSON 字串或陣列）
+                        // 解析 Moti URLs
                         var urls = result.album.moti_urls;
-                        console.log('原始 moti_urls:', urls);
-                        
-                        if (typeof urls === 'string') {
-                            try {
-                                images = JSON.parse(urls);
-                            } catch (e) {
-                                // 逗號分隔的字串，trim 每個 URL
-                                images = urls.split(',').map(function(u) { 
-                                    return u.trim(); 
-                                }).filter(function(u) { 
-                                    return u && u.startsWith('http'); 
-                                });
-                            }
+                        if (typeof urls === 'string' && urls.trim()) {
+                            motiImages = urls.split(',').map(function(u) { 
+                                return u.trim(); 
+                            }).filter(function(u) { 
+                                return u && u.startsWith('http'); 
+                            });
                         } else if (Array.isArray(urls)) {
-                            images = urls;
+                            motiImages = urls;
                         }
                         
-                        console.log('解析後圖片數量:', images.length);
-                        console.log('圖片列表:', images);
-                    } else {
-                        console.log('查詢結果:', result);
+                        // 解析 InBody URL
+                        inbodyUrl = result.album.inbody_url || '';
+                        if (inbodyUrl) {
+                            inbodyUrl = inbodyUrl.trim();
+                        }
+                        
+                        console.log('Moti 照片:', motiImages.length);
+                        console.log('InBody:', inbodyUrl ? '有' : '無');
                     }
                 } catch (error) {
                     console.error('查詢相簿失敗:', error);
-                    // 顯示錯誤訊息
                     document.getElementById('loading').style.display = 'none';
-                    document.getElementById('noImages').style.display = 'block';
-                    document.querySelector('.no-images p').textContent = '無法載入相簿，請稍後再試';
+                    document.getElementById('content').style.display = 'block';
+                    document.getElementById('noMoti').style.display = 'block';
+                    document.getElementById('noInbody').style.display = 'block';
                     return;
                 }
-            } else if (imagesParam) {
-                // 原有模式：直接從 URL 參數取得圖片
-                member = member || '會員';
-                images = imagesParam.split(',').filter(function(url) {
-                    return url && url.trim();
-                }).map(function(url) {
-                    return url.trim();
-                });
-            } else if (id) {
-                // 有 id 但沒設定 webhook
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('noImages').style.display = 'block';
-                document.querySelector('.no-images p').textContent = '相簿功能尚未設定完成';
-                return;
             }
             
             // 更新標題資訊
             document.getElementById('memberInfo').textContent = '👤 ' + (member || '會員');
             document.getElementById('dateInfo').textContent = date ? '📅 ' + date : '';
-            document.getElementById('photoCount').textContent = '📷 ' + images.length + ' 張照片';
             
-            // 更新頁面標題
-            document.title = (member || '會員') + ' - Moti 體態照片';
+            var totalCount = motiImages.length + (inbodyUrl ? 1 : 0);
+            document.getElementById('photoCount').textContent = '📷 ' + totalCount + ' 張照片';
+            document.title = (member || '會員') + ' - 體態分析相簿';
             
-            // 隱藏載入中
+            // 隱藏載入中，顯示內容
             document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
             
-            // 顯示圖片或無圖片訊息
-            if (images.length > 0) {
-                renderGallery();
-                renderThumbnails();
+            // 渲染 Moti 照片
+            if (motiImages.length > 0) {
+                renderMotiGallery(motiImages);
             } else {
-                document.getElementById('noImages').style.display = 'block';
+                document.getElementById('noMoti').style.display = 'block';
             }
+            
+            // 渲染 InBody
+            if (inbodyUrl) {
+                renderInbodyGallery(inbodyUrl);
+            } else {
+                document.getElementById('noInbody').style.display = 'block';
+            }
+            
+            // 建立縮圖
+            renderThumbnails();
         }
         
-        function renderGallery() {
-            var gallery = document.getElementById('gallery');
-            gallery.style.display = 'grid';
+        function renderMotiGallery(images) {
+            var gallery = document.getElementById('motiGallery');
             gallery.innerHTML = '';
             
             images.forEach(function(url, index) {
+                allImages.push({ url: url, type: 'moti' });
+                
                 var item = document.createElement('div');
                 item.className = 'gallery-item';
-                item.onclick = function() { openLightbox(index); };
+                item.onclick = function() { openLightbox(allImages.length - 1); };
                 item.innerHTML = 
-                    '<img src="' + url + '" alt="照片 ' + (index + 1) + '" loading="lazy">' +
+                    '<img src="' + url + '" alt="Moti ' + (index + 1) + '" loading="lazy">' +
                     '<span class="index">' + (index + 1) + '</span>';
                 gallery.appendChild(item);
             });
+        }
+        
+        function renderInbodyGallery(url) {
+            var gallery = document.getElementById('inbodyGallery');
+            gallery.innerHTML = '';
+            
+            allImages.push({ url: url, type: 'inbody' });
+            
+            var item = document.createElement('div');
+            item.className = 'gallery-item inbody-item';
+            item.onclick = function() { openLightbox(allImages.length - 1); };
+            item.innerHTML = 
+                '<img src="' + url + '" alt="InBody" loading="lazy">' +
+                '<span class="index">📊</span>';
+            gallery.appendChild(item);
         }
         
         function renderThumbnails() {
             var container = document.getElementById('lightboxThumbnails');
             container.innerHTML = '';
             
-            images.forEach(function(url, index) {
+            allImages.forEach(function(img, index) {
                 var thumb = document.createElement('div');
-                thumb.className = 'lightbox-thumb' + (index === 0 ? ' active' : '');
+                thumb.className = 'lightbox-thumb' + (img.type === 'inbody' ? ' inbody-thumb' : '') + (index === 0 ? ' active' : '');
                 thumb.onclick = function(e) { 
                     e.stopPropagation();
                     goToImage(index); 
                 };
-                thumb.innerHTML = '<img src="' + url + '" alt="">';
+                thumb.innerHTML = '<img src="' + img.url + '" alt="">';
                 container.appendChild(thumb);
             });
         }
@@ -576,7 +643,7 @@
         
         function navigateLightbox(direction) {
             event.stopPropagation();
-            currentIndex = (currentIndex + direction + images.length) % images.length;
+            currentIndex = (currentIndex + direction + allImages.length) % allImages.length;
             updateLightbox();
         }
         
@@ -586,10 +653,9 @@
         }
         
         function updateLightbox() {
-            document.getElementById('lightboxImg').src = images[currentIndex];
-            document.getElementById('lightboxCounter').textContent = (currentIndex + 1) + ' / ' + images.length;
+            document.getElementById('lightboxImg').src = allImages[currentIndex].url;
+            document.getElementById('lightboxCounter').textContent = (currentIndex + 1) + ' / ' + allImages.length;
             
-            // 更新縮圖選中狀態
             document.querySelectorAll('.lightbox-thumb').forEach(function(thumb, i) {
                 thumb.classList.toggle('active', i === currentIndex);
             });
@@ -621,9 +687,9 @@
             var diff = touchStartX - touchEndX;
             if (Math.abs(diff) > 50) {
                 if (diff > 0) {
-                    navigateLightbox(1); // 左滑 → 下一張
+                    navigateLightbox(1);
                 } else {
-                    navigateLightbox(-1); // 右滑 → 上一張
+                    navigateLightbox(-1);
                 }
             }
         }
