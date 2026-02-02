@@ -108,6 +108,108 @@
             border-bottom-color: var(--pink);
         }
         
+        /* 選擇工具列 */
+        .select-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--green-light);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .select-info {
+            color: var(--green-dark);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .select-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .select-btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .select-btn.outline {
+            background: var(--white);
+            color: var(--green-dark);
+            border: 1px solid var(--green);
+        }
+        
+        .select-btn.outline:hover {
+            background: var(--green);
+            color: var(--white);
+        }
+        
+        .select-btn.primary {
+            background: var(--green);
+            color: var(--white);
+        }
+        
+        .select-btn.primary:hover {
+            background: var(--green-dark);
+        }
+        
+        .select-btn.primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        /* 圖片選擇樣式 */
+        .gallery-item .select-checkbox {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 2px solid var(--white);
+            background: rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            z-index: 5;
+        }
+        
+        .gallery-item .select-checkbox:hover {
+            background: var(--green);
+            border-color: var(--green);
+        }
+        
+        .gallery-item .select-checkbox.selected {
+            background: var(--green);
+            border-color: var(--white);
+        }
+        
+        .gallery-item .select-checkbox.selected::after {
+            content: '✓';
+            color: var(--white);
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .gallery-item.selected {
+            outline: 3px solid var(--green);
+            outline-offset: 2px;
+        }
+        
         .gallery {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -220,6 +322,25 @@
         
         .lightbox-close:hover {
             background: var(--pink);
+        }
+        
+        .lightbox-download {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            border: none;
+            color: var(--white);
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        
+        .lightbox-download:hover {
+            background: var(--green);
         }
         
         .lightbox-content {
@@ -401,6 +522,22 @@
             
             .lightbox-nav.prev { left: 8px; }
             .lightbox-nav.next { right: 8px; }
+            
+            /* 選擇工具列響應式 */
+            .select-toolbar {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .select-actions {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .select-btn {
+                flex: 1;
+                min-width: 0;
+            }
         }
     </style>
 </head>
@@ -430,6 +567,20 @@
         </div>
         
         <div id="content" style="display:none;">
+            <!-- 選擇工具列 -->
+            <div class="select-toolbar" id="selectToolbar">
+                <div class="select-info">
+                    <span id="selectedCount">已選 0 張</span>
+                </div>
+                <div class="select-actions">
+                    <button class="select-btn outline" onclick="selectAll()">☑️ 全選</button>
+                    <button class="select-btn outline" onclick="clearSelection()">✖️ 取消</button>
+                    <button class="select-btn primary" id="downloadBtn" onclick="downloadSelected()" disabled>
+                        📥 下載 JPG
+                    </button>
+                </div>
+            </div>
+            
             <!-- Moti 照片區 -->
             <div class="section" id="motiSection">
                 <div class="section-title">📸 Moti 3D 體態照片</div>
@@ -452,7 +603,7 @@
         </div>
         
         <div class="footer">
-            <p>衡點健康</p>
+            <p>衡點健身 Balance Point Fitness</p>
         </div>
     </div>
     
@@ -460,6 +611,7 @@
     <div class="lightbox" id="lightbox">
         <div class="lightbox-header">
             <span class="lightbox-counter" id="lightboxCounter">1 / 5</span>
+            <button class="lightbox-download" onclick="downloadCurrent()" title="下載此圖片">📥</button>
             <button class="lightbox-close" onclick="closeLightbox()">×</button>
         </div>
         <div class="lightbox-content">
@@ -477,8 +629,10 @@
         };
         
         // 全域變數
-        var allImages = [];  // { url, type: 'moti' | 'inbody' }
+        var allImages = [];  // { url, type: 'moti' | 'inbody', selected: false }
         var currentIndex = 0;
+        var memberName = '';  // 學員姓名
+        var albumDate = '';   // 檢測日期
         
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
@@ -554,6 +708,10 @@
                 }
             }
             
+            // 保存到全域變數（給下載功能使用）
+            memberName = member;
+            albumDate = date;
+            
             // 更新標題資訊
             document.getElementById('memberInfo').textContent = '👤 ' + (member || '會員');
             document.getElementById('dateInfo').textContent = date ? '📅 ' + date : '';
@@ -590,17 +748,28 @@
             
             images.forEach(function(url, index) {
                 var imgIndex = allImages.length;  // 先取得索引
-                allImages.push({ url: url, type: 'moti' });  // 再加入陣列
+                allImages.push({ url: url, type: 'moti', selected: false });  // 再加入陣列
                 
                 var item = document.createElement('div');
                 item.className = 'gallery-item';
                 item.setAttribute('data-index', imgIndex);
+                
+                // 選擇 checkbox
+                var checkbox = document.createElement('div');
+                checkbox.className = 'select-checkbox';
+                checkbox.setAttribute('data-index', imgIndex);
+                checkbox.onclick = function(e) {
+                    e.stopPropagation();
+                    toggleSelect(parseInt(this.getAttribute('data-index')));
+                };
+                
                 item.onclick = function() { 
                     openLightbox(parseInt(this.getAttribute('data-index'))); 
                 };
                 item.innerHTML = 
                     '<img src="' + url + '" alt="Moti ' + (index + 1) + '" loading="lazy">' +
                     '<span class="index">' + (index + 1) + '</span>';
+                item.appendChild(checkbox);
                 gallery.appendChild(item);
             });
         }
@@ -610,18 +779,139 @@
             gallery.innerHTML = '';
             
             var imgIndex = allImages.length;  // 先取得索引
-            allImages.push({ url: url, type: 'inbody' });  // 再加入陣列
+            allImages.push({ url: url, type: 'inbody', selected: false });  // 再加入陣列
             
             var item = document.createElement('div');
             item.className = 'gallery-item inbody-item';
             item.setAttribute('data-index', imgIndex);
+            
+            // 選擇 checkbox
+            var checkbox = document.createElement('div');
+            checkbox.className = 'select-checkbox';
+            checkbox.setAttribute('data-index', imgIndex);
+            checkbox.onclick = function(e) {
+                e.stopPropagation();
+                toggleSelect(parseInt(this.getAttribute('data-index')));
+            };
+            
             item.onclick = function() { 
                 openLightbox(parseInt(this.getAttribute('data-index'))); 
             };
             item.innerHTML = 
                 '<img src="' + url + '" alt="InBody" loading="lazy">' +
                 '<span class="index">📊</span>';
+            item.appendChild(checkbox);
             gallery.appendChild(item);
+        }
+        
+        // ==================== 選擇功能 ====================
+        function toggleSelect(index) {
+            allImages[index].selected = !allImages[index].selected;
+            updateSelectionUI();
+        }
+        
+        function selectAll() {
+            allImages.forEach(function(img) {
+                img.selected = true;
+            });
+            updateSelectionUI();
+        }
+        
+        function clearSelection() {
+            allImages.forEach(function(img) {
+                img.selected = false;
+            });
+            updateSelectionUI();
+        }
+        
+        function updateSelectionUI() {
+            var selectedCount = 0;
+            
+            allImages.forEach(function(img, index) {
+                var item = document.querySelector('.gallery-item[data-index="' + index + '"]');
+                var checkbox = item ? item.querySelector('.select-checkbox') : null;
+                
+                if (img.selected) {
+                    selectedCount++;
+                    if (item) item.classList.add('selected');
+                    if (checkbox) checkbox.classList.add('selected');
+                } else {
+                    if (item) item.classList.remove('selected');
+                    if (checkbox) checkbox.classList.remove('selected');
+                }
+            });
+            
+            document.getElementById('selectedCount').textContent = '已選 ' + selectedCount + ' 張';
+            document.getElementById('downloadBtn').disabled = selectedCount === 0;
+        }
+        
+        async function downloadSelected() {
+            var selectedImages = allImages.filter(function(img) {
+                return img.selected;
+            });
+            
+            if (selectedImages.length === 0) {
+                alert('請先選擇要下載的圖片');
+                return;
+            }
+            
+            var downloadBtn = document.getElementById('downloadBtn');
+            var originalText = downloadBtn.innerHTML;
+            downloadBtn.disabled = true;
+            
+            // 產生檔名前綴（學員_日期）
+            var prefix = (memberName || '會員').replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
+            var dateStr = (albumDate || '').replace(/[\/\s:]/g, '-').replace(/-+/g, '-');
+            if (dateStr) prefix += '_' + dateStr;
+            
+            // 計算 moti 和 inbody 的編號
+            var motiCount = 0;
+            var inbodyCount = 0;
+            
+            for (var i = 0; i < selectedImages.length; i++) {
+                var img = selectedImages[i];
+                downloadBtn.innerHTML = '📥 下載中 ' + (i + 1) + '/' + selectedImages.length;
+                
+                try {
+                    // ImageKit URL 加上轉換參數
+                    var jpgUrl = img.url;
+                    if (jpgUrl.includes('ik.imagekit.io')) {
+                        jpgUrl += (jpgUrl.includes('?') ? '&' : '?') + 'tr=f-jpg';
+                    }
+                    
+                    // 取得檔名（學員_日期_類型_編號.jpg）
+                    var filename;
+                    if (img.type === 'moti') {
+                        motiCount++;
+                        filename = prefix + '_moti_' + motiCount + '.jpg';
+                    } else {
+                        inbodyCount++;
+                        filename = prefix + '_inbody_' + inbodyCount + '.jpg';
+                    }
+                    
+                    // 下載
+                    var response = await fetch(jpgUrl);
+                    var blob = await response.blob();
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    // 延遲避免瀏覽器阻擋
+                    if (i < selectedImages.length - 1) {
+                        await new Promise(function(resolve) { setTimeout(resolve, 500); });
+                    }
+                } catch (err) {
+                    console.error('下載失敗:', err);
+                }
+            }
+            
+            downloadBtn.innerHTML = originalText;
+            downloadBtn.disabled = false;
         }
         
         function renderThumbnails() {
@@ -650,6 +940,42 @@
         function closeLightbox() {
             document.getElementById('lightbox').classList.remove('active');
             document.body.style.overflow = '';
+        }
+        
+        // 下載當前圖片
+        async function downloadCurrent() {
+            var img = allImages[currentIndex];
+            if (!img) return;
+            
+            try {
+                // ImageKit URL 加上轉換參數
+                var jpgUrl = img.url;
+                if (jpgUrl.includes('ik.imagekit.io')) {
+                    jpgUrl += (jpgUrl.includes('?') ? '&' : '?') + 'tr=f-jpg';
+                }
+                
+                // 產生檔名
+                var prefix = (memberName || '會員').replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
+                var dateStr = (albumDate || '').replace(/[\/\s:]/g, '-').replace(/-+/g, '-');
+                if (dateStr) prefix += '_' + dateStr;
+                
+                var filename = prefix + '_' + img.type + '_' + (currentIndex + 1) + '.jpg';
+                
+                // 下載
+                var response = await fetch(jpgUrl);
+                var blob = await response.blob();
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                console.error('下載失敗:', err);
+                alert('下載失敗，請稍後再試');
+            }
         }
         
         function navigateLightbox(direction) {
