@@ -844,6 +844,18 @@
             document.getElementById('selectedCount').textContent = '已選 ' + selectedCount + ' 張';
             document.getElementById('downloadBtn').disabled = selectedCount === 0;
         }
+
+        // 檢測是否為行動裝置
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+        
+        // 檢測是否為 iOS
+        function isIOS() {
+            return /iPhone|iPad|iPod/i.test(navigator.userAgent) 
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
         
         async function downloadSelected() {
             var selectedImages = allImages.filter(function(img) {
@@ -852,6 +864,12 @@
             
             if (selectedImages.length === 0) {
                 alert('請先選擇要下載的圖片');
+                return;
+            }
+
+            // iOS 裝置：顯示批次保存提示
+            if (isIOS()) {
+                showMobileBatchSaveDialog(selectedImages);
                 return;
             }
             
@@ -913,6 +931,53 @@
             downloadBtn.innerHTML = originalText;
             downloadBtn.disabled = false;
         }
+
+        // 手機批次保存對話框
+        function showMobileBatchSaveDialog(images) {
+            var prefix = (memberName || '會員').replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
+            var dateStr = (albumDate || '').replace(/[\/\s:]/g, '-').replace(/-+/g, '-');
+            if (dateStr) prefix += '_' + dateStr;
+            
+            var motiCount = 0;
+            var inbodyCount = 0;
+            
+            var imagesHtml = images.map(function(img, index) {
+                var jpgUrl = img.url;
+                if (jpgUrl.includes('ik.imagekit.io')) {
+                    jpgUrl += (jpgUrl.includes('?') ? '&' : '?') + 'tr=f-jpg';
+                }
+                
+                var filename;
+                if (img.type === 'moti') {
+                    motiCount++;
+                    filename = prefix + '_moti_' + motiCount + '.jpg';
+                } else {
+                    inbodyCount++;
+                    filename = prefix + '_inbody_' + inbodyCount + '.jpg';
+                }
+                
+                return '<div style="margin-bottom:20px;text-align:center;">' +
+                    '<img src="' + jpgUrl + '" style="max-width:100%;max-height:200px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.3);" />' +
+                    '<p style="font-size:0.8rem;opacity:0.7;margin-top:8px;">' + (index + 1) + '. ' + filename + '</p>' +
+                    '</div>';
+            }).join('');
+            
+            var overlay = document.createElement('div');
+            overlay.id = 'mobileBatchOverlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:10001;overflow-y:auto;padding:20px;';
+            
+            overlay.innerHTML = '<div style="text-align:center;color:#fff;max-width:500px;margin:0 auto;">' +
+                '<div style="font-size:2.5rem;margin-bottom:15px;">📱</div>' +
+                '<h3 style="font-size:1.2rem;margin-bottom:10px;">保存 ' + images.length + ' 張圖片</h3>' +
+                '<p style="font-size:0.95rem;margin-bottom:20px;opacity:0.9;line-height:1.5;">' +
+                '請<strong>長按每張圖片</strong>，選擇「<strong>加入照片</strong>」保存</p>' +
+                '<div style="text-align:left;margin-bottom:20px;">' + imagesHtml + '</div>' +
+                '<button onclick="document.getElementById(\'mobileBatchOverlay\').remove()" ' +
+                'style="background:#7ac19a;color:#fff;border:none;padding:14px 40px;border-radius:25px;font-size:1rem;cursor:pointer;position:sticky;bottom:20px;">' +
+                '✓ 完成保存</button></div>';
+            
+            document.body.appendChild(overlay);
+        }
         
         function renderThumbnails() {
             var container = document.getElementById('lightboxThumbnails');
@@ -961,7 +1026,13 @@
                 
                 var filename = prefix + '_' + img.type + '_' + (currentIndex + 1) + '.jpg';
                 
-                // 下載
+                // iOS 裝置：開啟新視窗讓用戶長按保存
+                if (isIOS()) {
+                    showMobileSaveDialog(jpgUrl, filename);
+                    return;
+                }
+                
+                // Android 和桌面：使用 fetch + blob 下載
                 var response = await fetch(jpgUrl);
                 var blob = await response.blob();
                 var url = window.URL.createObjectURL(blob);
@@ -974,8 +1045,29 @@
                 window.URL.revokeObjectURL(url);
             } catch (err) {
                 console.error('下載失敗:', err);
-                alert('下載失敗，請稍後再試');
+                if (confirm('自動下載失敗，要開啟圖片讓您手動保存嗎？')) {
+                    window.open(jpgUrl, '_blank');
+                }
             }
+        }
+        
+        // 手機保存提示對話框
+        function showMobileSaveDialog(imageUrl, filename) {
+            var overlay = document.createElement('div');
+            overlay.id = 'mobileSaveOverlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:10001;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;';
+            
+            overlay.innerHTML = '<div style="text-align:center;color:#fff;max-width:400px;">' +
+                '<div style="font-size:3rem;margin-bottom:20px;">📱</div>' +
+                '<h3 style="font-size:1.3rem;margin-bottom:15px;">保存圖片到相簿</h3>' +
+                '<p style="font-size:1rem;margin-bottom:20px;opacity:0.9;line-height:1.6;">' +
+                '請<strong>長按下方圖片</strong>，<br>然後選擇「<strong>加入照片</strong>」或「<strong>儲存圖片</strong>」</p>' +
+                '<img src="' + imageUrl + '" style="max-width:100%;max-height:50vh;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.5);margin-bottom:20px;" />' +
+                '<p style="font-size:0.85rem;opacity:0.7;margin-bottom:20px;">' + filename + '</p>' +
+                '<button onclick="document.getElementById(\'mobileSaveOverlay\').remove()" ' +
+                'style="background:#7ac19a;color:#fff;border:none;padding:14px 40px;border-radius:25px;font-size:1rem;cursor:pointer;">✓ 完成</button></div>';
+            
+            document.body.appendChild(overlay);
         }
         
         function navigateLightbox(direction) {
